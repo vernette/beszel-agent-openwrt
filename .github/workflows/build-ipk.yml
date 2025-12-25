@@ -1,0 +1,233 @@
+name: Build Beszel Agent IPK
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * 0'
+
+env:
+  UPSTREAM_REPO: 'henrygd/beszel'
+  PACKAGE_NAME: 'beszel-agent'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.prepare.outputs.tag }}
+    strategy:
+      fail-fast: false
+      matrix:
+        branch:
+          - openwrt-23.05
+          - openwrt-24.10
+        arch:
+          - aarch64_cortex-a53
+          - aarch64_cortex-a72
+          - aarch64_generic
+          - arm_cortex-a7_neon-vfpv4
+          - arm_cortex-a9
+          - mipsel_24kc
+          - x86_64
+    container:
+      image: openwrt/sdk:${{ matrix.arch }}-${{ matrix.branch }}
+      options: --user root
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache SDK downloads
+        uses: actions/cache@v4
+        with:
+          path: /builder/dl
+          key: openwrt-dl-${{ matrix.branch }}-${{ matrix.arch }}-${{ hashFiles('beszel-agent/Makefile') }}
+          restore-keys: |
+            openwrt-dl-${{ matrix.branch }}-${{ matrix.arch }}-
+            openwrt-dl-${{ matrix.branch }}-
+
+      - name: Setup SDK
+        working-directory: /builder
+        run: HOME=/builder ./setup.sh
+
+      - name: Prepare build
+        id: prepare
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          TAG=$(./scripts/fetch-latest-version.sh "$UPSTREAM_REPO")
+          echo "Latest version: $TAG"
+
+          GOARCH=$(./scripts/arch-mapper.sh "${{ matrix.arch }}")
+          echo "Go architecture: $GOARCH"
+
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "goarch=$GOARCH" >> $GITHUB_OUTPUT
+          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+          echo "Building version: $TAG for arch: $GOARCH"
+
+      - name: Install dependencies
+        working-directory: /builder
+        run: |
+          apt update && apt install -y upx-ucl
+
+      - name: Download and prepare binary
+        env:
+          VERSION: ${{ steps.prepare.outputs.version }}
+          GOARCH: ${{ steps.prepare.outputs.goarch }}
+        run: |
+          set -euo pipefail
+          ./scripts/download-binary.sh "$VERSION" "$GOARCH" "./beszel-agent/files/usr/bin"
+
+      - name: Prepare package structure
+        working-directory: /builder
+        env:
+          VERSION: ${{ steps.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          cp -r $GITHUB_WORKSPACE/beszel-agent package/beszel-agent
+          cp -r $GITHUB_WORKSPACE/packaging/files/* package/beszel-agent/files/
+          cp $GITHUB_WORKSPACE/packaging/Makefile.prebuilt package/beszel-agent/Makefile
+          echo "=== Package structure ==="
+          ls -laR package/beszel-agent/files/
+
+      - name: Build IPK
+        working-directory: /builder
+        env:
+          VERSION: ${{ steps.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          echo "CONFIG_PACKAGE_beszel-agent=m" >> .config
+          make defconfig
+          make package/beszel-agent/compile V=s -j$(nproc) BUILD_LOG=1 \
+            BESZEL_VERSION="$VERSION"
+
+      - name: Collect artifacts
+        env:
+          ARCH: ${{ matrix.arch }}
+          BRANCH: ${{ matrix.branch }}
+        run: |
+          set -euo pipefail
+          echo "=== Searching for IPK files ==="
+          find /builder/bin/packages -name "beszel-agent*.ipk" -ls || true
+
+          mkdir -p $GITHUB_WORKSPACE/ipk-output
+          find /builder/bin/packages -name "beszel-agent*.ipk" -exec cp {} $GITHUB_WORKSPACE/ipk-output/ \;
+          cd $GITHUB_WORKSPACE/ipk-output
+
+          echo "=== Files in ipk-output ==="
+          ls -la
+
+          IPK_COUNT=$(ls beszel-agent*.ipk 2>/dev/null | wc -l)
+
+          if [[ $IPK_COUNT -eq 0 ]]; then
+            echo "ERROR: No IPK file found!" >&2
+            exit 1
+          fi
+
+          echo "Found $IPK_COUNT IPK file(s)"
+
+          VERSION_DIR="${BRANCH/openwrt-}/$ARCH"
+          mkdir -p "$VERSION_DIR"
+          mv *.ipk "$VERSION_DIR/"
+          cd "$VERSION_DIR"
+
+          sha256sum *.ipk > SHA256SUMS
+
+          cd $GITHUB_WORKSPACE/ipk-output
+          tar -cvf $GITHUB_WORKSPACE/ipk-$BRANCH-$ARCH.tar "$VERSION_DIR"
+
+      - name: Validate IPK package
+        env:
+          ARCH: ${{ matrix.arch }}
+          BRANCH: ${{ matrix.branch }}
+        run: |
+          set -euo pipefail
+          VERSION_DIR="${BRANCH/openwrt-}/$ARCH"
+          cd ipk-output/$VERSION_DIR
+
+          echo "=== Validating packages in $VERSION_DIR ==="
+          for ipk in *.ipk; do
+            size=$(stat -f%z "$ipk" 2>/dev/null || stat -c%s "$ipk")
+            if [[ $size -lt 10000 ]]; then
+              echo "ERROR: IPK file $ipk is too small ($size bytes)" >&2
+              exit 1
+            fi
+            echo "✓ $ipk size: $size bytes"
+          done
+
+          sha256sum -c SHA256SUMS
+          echo "✓ Package validation passed"
+
+      - name: Upload packages
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipk-${{ matrix.branch }}-${{ matrix.arch }}
+          path: |
+            ipk-output/**/*.ipk
+            ipk-output/**/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
+
+  gh-pages:
+    needs: build
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ipk-*
+
+      - name: Prepare files
+        run: |
+          mkdir public
+          find . -name 'ipk-*.tar' -exec tar -C ./public -xvf {} \;
+
+      - name: Deploy to GH pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          full_commit_message: 'Beszel Agent ${{ needs.build.outputs.tag }}'
+          force_orphan: true
+
+  release:
+    needs: [build, gh-pages]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      matrix:
+        branch:
+          - '23.05'
+          - '24.10'
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ipk-*
+
+      - name: Prepare files
+        env:
+          BRANCH: ${{ matrix.branch }}
+        run: |
+          find . -name "ipk-openwrt-$BRANCH-*.tar" -exec tar -xvf {} --wildcards '*.ipk' \;
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          fail_on_unmatched_files: true
+          tag_name: ${{ needs.build.outputs.tag }}-${{ matrix.branch }}
+          name: ${{ needs.build.outputs.tag }} for OpenWrt ${{ matrix.branch }}
+          target_commitish: gh-pages
+          body: |
+            ### Beszel Agent ${{ needs.build.outputs.tag }} for OpenWrt ${{ matrix.branch }}
+          files: ./**/*.ipk
