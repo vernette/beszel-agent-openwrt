@@ -18,7 +18,6 @@ jobs:
       fail-fast: false
       matrix:
         branch:
-          - openwrt-23.05
           - openwrt-24.10
         arch:
           - aarch64_cortex-a53
@@ -207,7 +206,6 @@ jobs:
       max-parallel: 1
       matrix:
         branch:
-          - '23.05'
           - '24.10'
     steps:
       - name: Download artifacts
