@@ -10,7 +10,41 @@ env:
   PACKAGE_NAME: 'beszel-agent'
 
 jobs:
+  validate-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      latest_upstream_version: ${{ steps.validate.outputs.latest_upstream_version }}
+      latest_repo_tag: ${{ steps.validate.outputs.latest_repo_tag }}
+      should_build: ${{ steps.validate.outputs.should_build }}
+    steps:
+      - name: Validate versions
+        id: validate
+        run: |
+          set -euo pipefail
+
+          LATEST_UPSTREAM=$(curl -s "https://api.github.com/repos/$UPSTREAM_REPO/releases/latest" | jq -r .tag_name)
+          echo "Latest upstream Beszel: $LATEST_UPSTREAM"
+
+          LATEST_REPO=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/latest" | jq -r .tag_name)
+          echo "Latest repo release: $LATEST_REPO"
+
+          REPO_VERSION=${LATEST_REPO%%-*}
+
+          echo "Repo base version: $REPO_VERSION"
+
+          if [ "$LATEST_UPSTREAM" != "$REPO_VERSION" ]; then
+            echo "New version detected! Building $LATEST_UPSTREAM → $LATEST_UPSTREAM"
+            echo "latest_upstream_version=$LATEST_UPSTREAM" >> $GITHUB_OUTPUT
+            echo "latest_repo_tag=$LATEST_UPSTREAM-${{ matrix.branch }}" >> $GITHUB_OUTPUT
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "Versions match: $LATEST_UPSTREAM == $REPO_VERSION. No build needed."
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          fi
+
   build:
+    needs: validate-versions
+    if: needs.validate-versions.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.prepare.outputs.tag }}
@@ -57,7 +91,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          TAG=$(./scripts/fetch-latest-version.sh "$UPSTREAM_REPO")
+          TAG="${{ needs.validate-versions.outputs.latest_upstream_version }}"
           echo "Latest version: $TAG"
 
           GOARCH=$(./scripts/arch-mapper.sh "${{ matrix.arch }}")
@@ -173,7 +207,8 @@ jobs:
           retention-days: 30
 
   gh-pages:
-    needs: build
+    needs: [validate-versions, build]
+    if: needs.validate-versions.outputs.should_build == 'true'
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -198,7 +233,8 @@ jobs:
           force_orphan: true
 
   release:
-    needs: [build, gh-pages]
+    needs: [validate-versions, build, gh-pages]
+    if: needs.validate-versions.outputs.should_build == 'true'
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -223,9 +259,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           fail_on_unmatched_files: true
-          tag_name: ${{ needs.build.outputs.tag }}-${{ matrix.branch }}
-          name: ${{ needs.build.outputs.tag }} for OpenWrt ${{ matrix.branch }}
+          tag_name: ${{ needs.validate-versions.outputs.latest_repo_tag }}
+          name: ${{ needs.validate-versions.outputs.latest_repo_tag }} for OpenWrt ${{ matrix.branch }}
           target_commitish: gh-pages
           body: |
-            ### Beszel Agent ${{ needs.build.outputs.tag }} for OpenWrt ${{ matrix.branch }}
+            ### Beszel Agent ${{ needs.validate-versions.outputs.latest_repo_tag }} for OpenWrt ${{ matrix.branch }}
           files: ./**/*.ipk
