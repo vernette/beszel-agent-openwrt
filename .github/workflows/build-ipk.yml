@@ -105,14 +105,6 @@ jobs:
         run: |
           apt update && apt install -y upx-ucl
 
-      - name: Download and prepare binary
-        env:
-          VERSION: ${{ steps.prepare.outputs.version }}
-          GOARCH: ${{ steps.prepare.outputs.goarch }}
-        run: |
-          set -euo pipefail
-          ./scripts/download-binary.sh "$VERSION" "$GOARCH" "./beszel-agent/files/usr/bin"
-
       - name: Prepare package structure
         working-directory: /builder
         env:
@@ -120,8 +112,6 @@ jobs:
         run: |
           set -euo pipefail
           cp -r $GITHUB_WORKSPACE/beszel-agent package/beszel-agent
-          cp -r $GITHUB_WORKSPACE/packaging/files/* package/beszel-agent/files/
-          cp $GITHUB_WORKSPACE/packaging/Makefile.prebuilt package/beszel-agent/Makefile
           echo "=== Package structure ==="
           ls -laR package/beszel-agent/files/
 

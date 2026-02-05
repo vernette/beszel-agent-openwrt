@@ -40,10 +40,10 @@ endef
 define Package/beszel-agent/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/beszel-agent $(1)/usr/bin/
-	
+
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/beszel-agent.init $(1)/etc/init.d/beszel-agent
-	
+
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_CONF) ./files/beszel-agent.config $(1)/etc/config/beszel-agent
 endef
