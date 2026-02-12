@@ -7,12 +7,14 @@ USE_PROCD=1
 PROG=/usr/bin/beszel-agent
 
 start_service() {
-	local enabled port key
+	local enabled port key url token
 	
 	config_load 'beszel-agent'
 	config_get_bool enabled 'agent' 'enabled' '0'
 	config_get port 'agent' 'port' '45876'
 	config_get key 'agent' 'public_key' ''
+	config_get url 'agent' 'hub_url' ''
+	config_get token 'agent' 'token' ''
 	
 	[ "$enabled" -eq 0 ] && return 0
 
@@ -21,8 +23,18 @@ start_service() {
 		return 1
 	}
 	
+    if [ -n "$url" ] || [ -n "$token" ]; then
+        if [ -z "$url" ] || [ -z "$token" ]; then
+            logger -t beszel-agent "Outbound mode requires both hub_url and token, but only one set!"
+            return 1
+        fi
+    fi
+
 	procd_open_instance beszel-agent
 	procd_set_param command "$PROG" -listen "$port" -key "$key"
+    [ -n "$url" ] && [ -n "$token" ] && {
+        procd_append_param command -url "$url" -token "$token"
+    }
 	procd_set_param respawn 3600 5 5
 	procd_set_param stdout 1
 	procd_set_param stderr 1

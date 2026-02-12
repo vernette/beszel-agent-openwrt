@@ -48,9 +48,15 @@ config agent 'agent'
   option enabled '1' # enable agent
   option port '45876' # port for hub connection
   option public_key 'YOUR_PUBLIC_KEY_HERE' # public key from hub
+
+  # if you want to use the outbound Websockets connection, you
+  # also need to specify the `hub_url` and `token` options
+  # (see https://beszel.dev/guide/security for details)
+  option hub_url 'https://YOUR_BESZEL_HUB_URL_HERE'
+  option token 'YOUR_AGENT_TOKEN_HERE'
 ```
 
-Get your authentication key from the Beszel hub when adding a new system.
+Get your authentication key (and agent token, if necessary) from the Beszel hub when adding a new system.
 
 ## Links
 
