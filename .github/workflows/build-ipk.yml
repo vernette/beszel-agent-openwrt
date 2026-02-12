@@ -2,6 +2,16 @@ name: Build Beszel Agent IPK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - 'beszel-agent/**'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'beszel-agent/**'
   schedule:
     - cron: '0 2 * * 0'
 
