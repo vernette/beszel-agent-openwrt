@@ -1,4 +1,4 @@
-name: Build Beszel Agent IPK
+name: Build Beszel Agent IPK/APK
 
 on:
   workflow_dispatch:
@@ -38,7 +38,6 @@ jobs:
           echo "Latest repo release: $LATEST_REPO"
 
           REPO_VERSION=${LATEST_REPO%%-*}
-
           echo "Repo base version: $REPO_VERSION"
 
           if [ "$LATEST_UPSTREAM" != "$REPO_VERSION" ]; then
@@ -59,8 +58,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        branch:
-          - openwrt-24.10
         arch:
           - aarch64_cortex-a53
           - aarch64_cortex-a72
@@ -69,6 +66,12 @@ jobs:
           - arm_cortex-a9
           - mipsel_24kc
           - x86_64
+        branch:
+          - openwrt-24.10
+          - 25.12.0-rc5
+        include:
+          - { branch: openwrt-24.10, package_type: ipk }
+          - { branch: 25.12.0-rc5,   package_type: apk }
     container:
       image: openwrt/sdk:${{ matrix.arch }}-${{ matrix.branch }}
       options: --user root
@@ -120,8 +123,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: /builder
-        run: |
-          apt update && apt install -y upx-ucl
+        run: apt update && apt install -y upx-ucl
 
       - name: Prepare package structure
         working-directory: /builder
@@ -133,7 +135,7 @@ jobs:
           echo "=== Package structure ==="
           ls -laR package/beszel-agent/files/
 
-      - name: Build IPK
+      - name: Build package
         working-directory: /builder
         env:
           VERSION: ${{ steps.prepare.outputs.version }}
@@ -150,54 +152,59 @@ jobs:
         env:
           ARCH: ${{ matrix.arch }}
           BRANCH: ${{ matrix.branch }}
+          PKG_TYPE: ${{ matrix.package_type }}
         run: |
           set -euo pipefail
-          echo "=== Searching for IPK files ==="
-          find /builder/bin/packages -name "beszel-agent*.ipk" -ls || true
+          echo "=== Searching for package files ==="
+          find /builder/bin/packages -name "beszel-agent*.$PKG_TYPE" -ls || true
 
-          mkdir -p $GITHUB_WORKSPACE/ipk-output
-          find /builder/bin/packages -name "beszel-agent*.ipk" -exec cp {} $GITHUB_WORKSPACE/ipk-output/ \;
-          cd $GITHUB_WORKSPACE/ipk-output
+          mkdir -p $GITHUB_WORKSPACE/pkg-output
+          find /builder/bin/packages -name "beszel-agent*.$PKG_TYPE" | while read f; do
+            filename=$(basename "$f")
+            if [[ "$PKG_TYPE" == "apk" ]]; then
+              filename="${filename%.apk}_${ARCH}.apk"
+            fi
+            cp "$f" "$GITHUB_WORKSPACE/pkg-output/$filename"
+          done
 
-          echo "=== Files in ipk-output ==="
+          cd $GITHUB_WORKSPACE/pkg-output
+          echo "=== Files in pkg-output ==="
           ls -la
 
-          IPK_COUNT=$(ls beszel-agent*.ipk 2>/dev/null | wc -l)
-
-          if [[ $IPK_COUNT -eq 0 ]]; then
-            echo "ERROR: No IPK file found!" >&2
+          PKG_COUNT=$(ls beszel-agent*.$PKG_TYPE 2>/dev/null | wc -l)
+          if [[ $PKG_COUNT -eq 0 ]]; then
+            echo "ERROR: No $PKG_TYPE file found!" >&2
             exit 1
           fi
-
-          echo "Found $IPK_COUNT IPK file(s)"
+          echo "Found $PKG_COUNT $PKG_TYPE file(s)"
 
           VERSION_DIR="${BRANCH/openwrt-}/$ARCH"
           mkdir -p "$VERSION_DIR"
-          mv *.ipk "$VERSION_DIR/"
+          mv *.$PKG_TYPE "$VERSION_DIR/"
           cd "$VERSION_DIR"
+          sha256sum *.$PKG_TYPE > SHA256SUMS
 
-          sha256sum *.ipk > SHA256SUMS
+          cd $GITHUB_WORKSPACE/pkg-output
+          tar -cvf $GITHUB_WORKSPACE/pkg-$BRANCH-$ARCH.tar "$VERSION_DIR"
 
-          cd $GITHUB_WORKSPACE/ipk-output
-          tar -cvf $GITHUB_WORKSPACE/ipk-$BRANCH-$ARCH.tar "$VERSION_DIR"
-
-      - name: Validate IPK package
+      - name: Validate package
         env:
           ARCH: ${{ matrix.arch }}
           BRANCH: ${{ matrix.branch }}
+          PKG_TYPE: ${{ matrix.package_type }}
         run: |
           set -euo pipefail
           VERSION_DIR="${BRANCH/openwrt-}/$ARCH"
-          cd ipk-output/$VERSION_DIR
+          cd pkg-output/$VERSION_DIR
 
           echo "=== Validating packages in $VERSION_DIR ==="
-          for ipk in *.ipk; do
-            size=$(stat -f%z "$ipk" 2>/dev/null || stat -c%s "$ipk")
+          for pkg in *.$PKG_TYPE; do
+            size=$(stat -c%s "$pkg")
             if [[ $size -lt 10000 ]]; then
-              echo "ERROR: IPK file $ipk is too small ($size bytes)" >&2
+              echo "ERROR: $pkg is too small ($size bytes)" >&2
               exit 1
             fi
-            echo "✓ $ipk size: $size bytes"
+            echo "✓ $pkg size: $size bytes"
           done
 
           sha256sum -c SHA256SUMS
@@ -207,10 +214,10 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ipk-${{ matrix.branch }}-${{ matrix.arch }}
+          name: pkg-${{ matrix.branch }}-${{ matrix.arch }}
           path: |
-            ipk-output/**/*.ipk
-            ipk-output/**/SHA256SUMS
+            pkg-output/**/*.${{ matrix.package_type }}
+            pkg-output/**/SHA256SUMS
           if-no-files-found: error
           retention-days: 30
 
@@ -224,12 +231,12 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: ipk-*
+          pattern: pkg-*
 
       - name: Prepare files
         run: |
           mkdir public
-          find . -name 'ipk-*.tar' -exec tar -C ./public -xvf {} \;
+          find . -name 'pkg-*.tar' -exec tar -C ./public -xvf {} \;
 
       - name: Deploy to GH pages
         uses: peaceiris/actions-gh-pages@v4
@@ -246,30 +253,29 @@ jobs:
     permissions:
       contents: write
     runs-on: ubuntu-latest
-    strategy:
-      max-parallel: 1
-      matrix:
-        branch:
-          - '24.10'
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: ipk-*
+          pattern: pkg-*
 
       - name: Prepare files
-        env:
-          BRANCH: ${{ matrix.branch }}
         run: |
-          find . -name "ipk-openwrt-$BRANCH-*.tar" -exec tar -xvf {} --wildcards '*.ipk' \;
+          find . -name "pkg-openwrt-*.tar" \
+            -exec tar -xvf {} --wildcards "*.ipk" --wildcards "*.apk" \;
 
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
           fail_on_unmatched_files: true
-          tag_name: ${{ needs.validate-versions.outputs.latest_upstream_version }}-${{ matrix.branch }}
-          name: ${{ needs.validate-versions.outputs.latest_upstream_version }} for OpenWrt ${{ matrix.branch }}
+          tag_name: ${{ needs.validate-versions.outputs.latest_upstream_version }}
+          name: ${{ needs.validate-versions.outputs.latest_upstream_version }}
           target_commitish: gh-pages
           body: |
-            ### Beszel Agent ${{ needs.validate-versions.outputs.latest_upstream_version }} for OpenWrt ${{ matrix.branch }}
-          files: ./**/*.ipk
+            ### Beszel Agent ${{ needs.validate-versions.outputs.latest_upstream_version }}
+
+            `IPK` - OpenWrt 24.10
+            `APK` - OpenWrt 25.12
+          files: |
+            ./**/*.ipk
+            ./**/*.apk
