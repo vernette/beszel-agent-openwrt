@@ -137,12 +137,14 @@ jobs:
         working-directory: /builder
         env:
           VERSION: ${{ steps.prepare.outputs.version }}
+          GOARCH: ${{ steps.prepare.outputs.goarch }}
         run: |
           set -euo pipefail
           echo "CONFIG_PACKAGE_beszel-agent=m" >> .config
           make defconfig
           make package/beszel-agent/compile V=s -j$(nproc) BUILD_LOG=1 \
-            BESZEL_VERSION="$VERSION"
+            BESZEL_VERSION="$VERSION" \
+            BESZEL_GOARCH="$GOARCH"
 
       - name: Collect artifacts
         env:
