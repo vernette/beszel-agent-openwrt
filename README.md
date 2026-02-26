@@ -2,36 +2,47 @@
 
 Lightweight server monitoring agent packaged for OpenWrt routers and devices.
 
-[Beszel](https://github.com/henrygd/beszel) is a lightweight server monitoring hub with historical data, docker stats, and alerts. This repository provides pre-built IPK packages for easy installation on OpenWrt.
+[Beszel](https://github.com/henrygd/beszel) is a lightweight server monitoring hub with historical data, docker stats, and alerts. This repository provides pre-built IPK/APK packages for easy installation on OpenWrt.
 
 ## Installation
-
-### 1. Find Your Architecture
 
 Check your device architecture:
 
 ```sh
-opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max = $3; arch = $2}} END {print arch}'
+grep DISTRIB_ARCH /etc/openwrt_release | cut -d"'" -f2
 ```
 
-### 2. Download Package
-
-Download the appropriate IPK from [Releases](../../releases) page.
+Download the appropriate package from the [Releases](../../releases) page.
 
 Or directly via wget:
 
 ```sh
-wget -O beszel-agent.ipk https://github.com/vernette/beszel-agent-openwrt/releases/download/vX.X.X-OPENWRT_VERSION/beszel-agent-r1_X.X.X-1_YOUR_ARCH.ipk
+# opkg
+wget -O beszel-agent.ipk https://github.com/vernette/beszel-agent-openwrt/releases/download/vX.X.X/beszel-agent_X.X.X-r1_YOUR_ARCH.ipk
+```
+
+```sh
+# apk
+wget -O beszel-agent.apk https://github.com/vernette/beszel-agent-openwrt/releases/download/vX.X.X/beszel-agent-X.X.X-r1_YOUR_ARCH.apk
 ```
 
 > [!NOTE]
-> Replace `X.X.X` with the version number, `OPENWRT_VERSION` with your OpenWrt version and `YOUR_ARCH` with your device architecture
+> Replace `X.X.X` with the version number and `YOUR_ARCH` with your device architecture
 
-### 3. Install
+Install the package depending on your package manager:
 
 ```sh
+# opkg
 opkg install beszel-agent*.ipk
 ```
+
+```sh
+# apk
+apk add --allow-untrusted beszel-agent*.apk
+```
+
+> [!NOTE]
+> `--allow-untrusted` is required because the package is not signed with an OpenWrt key
 
 ## Configuration
 
