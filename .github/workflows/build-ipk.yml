@@ -84,9 +84,6 @@ jobs:
         with:
           path: /builder/dl
           key: openwrt-dl-${{ matrix.branch }}-${{ matrix.arch }}-${{ needs.validate-versions.outputs.latest_upstream_version }}-${{ hashFiles('beszel-agent/Makefile') }}
-          restore-keys: |
-            openwrt-dl-${{ matrix.branch }}-${{ matrix.arch }}-
-            openwrt-dl-${{ matrix.branch }}-
 
       - name: Setup SDK
         working-directory: /builder
