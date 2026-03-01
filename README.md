@@ -6,6 +6,16 @@ Lightweight server monitoring agent packaged for OpenWrt routers and devices.
 
 ## Installation
 
+### Automatic
+
+Run the installation script:
+
+```sh
+sh <(wget -qO- https://github.com/vernette/beszel-agent-openwrt/raw/master/install.sh)
+```
+
+### Manual
+
 Check your device architecture:
 
 ```sh
