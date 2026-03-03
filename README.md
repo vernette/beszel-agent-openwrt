@@ -33,7 +33,7 @@ wget -O beszel-agent.ipk https://github.com/vernette/beszel-agent-openwrt/releas
 
 ```sh
 # apk
-wget -O beszel-agent.apk https://github.com/vernette/beszel-agent-openwrt/releases/download/vX.X.X/beszel-agent-X.X.X-r1_YOUR_ARCH.apk
+wget -O beszel-agent.apk https://github.com/vernette/beszel-agent-openwrt/releases/download/vX.X.X/beszel-agent_X.X.X-r1_YOUR_ARCH.apk
 ```
 
 > [!NOTE]
