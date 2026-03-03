@@ -32,11 +32,7 @@ detect_pkg_manager() {
 }
 
 resolve_asset_url() {
-  if [ "$PKG_EXT" = "apk" ]; then
-    MATCH_PATTERN="-${ARCH}.apk"
-  else
-    MATCH_PATTERN="_${ARCH}.ipk"
-  fi
+  MATCH_PATTERN="_${ARCH}.${PKG_EXT}"
 
   PKG_URL="$(wget -qO- "$API_URL" | grep -o 'https://[^"]*'"${MATCH_PATTERN}")"
   if [ -z "$PKG_URL" ]; then
