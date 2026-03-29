@@ -65,6 +65,7 @@ jobs:
           - arm_cortex-a7_neon-vfpv4
           - arm_cortex-a9
           - mipsel_24kc
+          - mips_24kc
           - x86_64
         branch:
           - openwrt-24.10
