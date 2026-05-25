@@ -30,11 +30,15 @@ start_service() {
     fi
   fi
 
+  mkdir -p /usr/share/beszel-agent
+
   procd_open_instance beszel-agent
   procd_set_param command "$PROG" -listen "$port" -key "$key"
   [ -n "$url" ] && [ -n "$token" ] && {
     procd_append_param command -url "$url" -token "$token"
   }
+
+  procd_set_param env DATA_DIR=/usr/share/beszel-agent
   procd_set_param respawn 3600 5 5
   procd_set_param stdout 1
   procd_set_param stderr 1
