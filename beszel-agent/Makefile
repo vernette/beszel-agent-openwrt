@@ -33,7 +33,11 @@ endef
 
 define Build/Compile
 	if command -v upx >/dev/null 2>&1; then \
-		upx --best --lzma $(PKG_BUILD_DIR)/beszel-agent || true; \
+		if [ "$(BESZEL_GOARCH)" = "mips" ] || [ "$(BESZEL_GOARCH)" = "mipsle" ]; then \
+			echo "Skipping UPX compression for MIPS architectures (prevents execution hang)..."; \
+		else \
+			upx --best --lzma $(PKG_BUILD_DIR)/beszel-agent || true; \
+		fi; \
 	fi
 endef
 
