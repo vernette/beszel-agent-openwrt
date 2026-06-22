@@ -7,7 +7,7 @@ USE_PROCD=1
 PROG=/usr/bin/beszel-agent
 
 start_service() {
-  local enabled port key url token
+  local enabled port key url token extra_fs
 
   config_load 'beszel-agent'
   config_get_bool enabled 'agent' 'enabled' '0'
@@ -15,6 +15,7 @@ start_service() {
   config_get key 'agent' 'public_key' ''
   config_get url 'agent' 'hub_url' ''
   config_get token 'agent' 'token' ''
+  config_get extra_fs 'agent' 'extra_filesystems' ''
 
   [ "$enabled" -eq 0 ] && return 0
 
@@ -39,6 +40,7 @@ start_service() {
   }
 
   procd_set_param env DATA_DIR=/usr/share/beszel-agent
+  [ -n "$extra_fs" ] && procd_append_param env EXTRA_FILESYSTEMS="$extra_fs"
   procd_set_param respawn 3600 5 5
   procd_set_param stdout 1
   procd_set_param stderr 1

@@ -75,6 +75,9 @@ config agent 'agent'
   # (see https://beszel.dev/guide/security for details)
   option hub_url 'https://YOUR_BESZEL_HUB_URL_HERE'
   option token 'YOUR_AGENT_TOKEN_HERE'
+
+  # optional, monitor extra disks (comma-separated, `device__label`)
+  option extra_filesystems 'sda1__NAS'
 ```
 
 Get your authentication key (and agent token, if necessary) from the Beszel hub when adding a new system.
