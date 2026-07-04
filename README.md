@@ -89,6 +89,10 @@ service beszel-agent enable
 service beszel-agent start
 ```
 
+### Fingerprint storage
+
+The agent fingerprint is stored in `/etc/config/beszel-agent` (as `option fingerprint`, auto-populated on first start), so it survives reboots and `sysupgrade`. Runtime data lives in `/var/lib/beszel-agent` (tmpfs), avoiding flash wear.
+
 ## Links
 
 - [Beszel Project](https://github.com/henrygd/beszel)
