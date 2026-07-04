@@ -34,7 +34,7 @@ detect_pkg_manager() {
 resolve_asset_url() {
   MATCH_PATTERN="_${ARCH}.${PKG_EXT}"
 
-  PKG_URL="$(wget -qO- "$API_URL" | grep -o 'https://[^"]*'"${MATCH_PATTERN}")"
+  PKG_URL="$(wget -qO- "$API_URL" | grep -o 'https://[^"]*'"${MATCH_PATTERN}" | head -n 1)"
   if [ -z "$PKG_URL" ]; then
     echo "Error: failed to find asset URL for ${ARCH} (${PKG_EXT})."
     exit 1
@@ -49,7 +49,11 @@ download_package() {
     "Architecture" "${ARCH}" \
     "Package manager" "${PKG_MANAGER}" \
     "Downloading" "${PKG_URL}"
-  wget -qO "$PKG_PATH" "$PKG_URL"
+  if ! wget -qO "$PKG_PATH" "$PKG_URL"; then
+    echo "Error: failed to download ${PKG_URL}."
+    rm -f "$PKG_PATH"
+    exit 1
+  fi
 }
 
 install_package() {
