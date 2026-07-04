@@ -6,7 +6,7 @@ PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)_linux_$(or $(BESZEL_GOARCH),arm64).tar.gz
 PKG_SOURCE_URL:=https://github.com/henrygd/beszel/releases/download/v$(PKG_VERSION)/
-PKG_HASH:=skip
+PKG_HASH:=$(or $(BESZEL_HASH),skip)
 
 PKG_LICENSE:=MIT
 PKG_LICENSE_FILES:=LICENSE

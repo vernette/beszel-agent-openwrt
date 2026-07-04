@@ -2,6 +2,11 @@ name: Build Beszel Agent IPK/APK
 
 on:
   workflow_dispatch:
+    inputs:
+      force_build:
+        description: 'Build even if versions match'
+        type: boolean
+        default: false
   push:
     branches:
       - master
@@ -40,7 +45,7 @@ jobs:
           REPO_VERSION=${LATEST_REPO%%-*}
           echo "Repo base version: $REPO_VERSION"
 
-          if [ "$LATEST_UPSTREAM" != "$REPO_VERSION" ]; then
+          if [ "$LATEST_UPSTREAM" != "$REPO_VERSION" ] || [ "${{ inputs.force_build }}" = "true" ]; then
             echo "New version detected! Building $REPO_VERSION -> $LATEST_UPSTREAM"
             echo "latest_upstream_version=$LATEST_UPSTREAM" >> $GITHUB_OUTPUT
             echo "should_build=true" >> $GITHUB_OUTPUT
@@ -117,8 +122,17 @@ jobs:
 
           echo "Go architecture: $GOARCH"
 
+          CHECKSUMS_URL="https://github.com/$UPSTREAM_REPO/releases/download/$TAG/beszel_${TAG#v}_checksums.txt"
+          HASH=$(wget -qO- "$CHECKSUMS_URL" | grep " beszel-agent_linux_${GOARCH}.tar.gz\$" | cut -d' ' -f1)
+          if [ -z "$HASH" ]; then
+            echo "Failed to get checksum from $CHECKSUMS_URL" >&2
+            exit 1
+          fi
+          echo "Tarball SHA256: $HASH"
+
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "goarch=$GOARCH" >> $GITHUB_OUTPUT
+          echo "hash=$HASH" >> $GITHUB_OUTPUT
           echo "version=${TAG#v}" >> $GITHUB_OUTPUT
           echo "Building version: $TAG for arch: $GOARCH"
 
@@ -147,7 +161,8 @@ jobs:
           make defconfig
           make package/beszel-agent/compile V=s -j$(nproc) BUILD_LOG=1 \
             BESZEL_VERSION="$VERSION" \
-            BESZEL_GOARCH="$GOARCH"
+            BESZEL_GOARCH="$GOARCH" \
+            BESZEL_HASH="${{ steps.prepare.outputs.hash }}"
 
       - name: Collect artifacts
         env:
