@@ -82,6 +82,13 @@ config agent 'agent'
 
 Get your authentication key (and agent token, if necessary) from the Beszel hub when adding a new system.
 
+Then enable and start the service:
+
+```sh
+service beszel-agent enable
+service beszel-agent start
+```
+
 ## Links
 
 - [Beszel Project](https://github.com/henrygd/beszel)
