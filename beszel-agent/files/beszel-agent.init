@@ -5,9 +5,12 @@ STOP=10
 
 USE_PROCD=1
 PROG=/usr/bin/beszel-agent
+DATA_DIR=/var/lib/beszel-agent
+FP_FILE="$DATA_DIR/fingerprint"
+OLD_FP_FILE=/usr/share/beszel-agent/fingerprint
 
 start_service() {
-  local enabled port key url token extra_fs
+  local enabled port key url token extra_fs fp
 
   config_load 'beszel-agent'
   config_get_bool enabled 'agent' 'enabled' '0'
@@ -16,6 +19,7 @@ start_service() {
   config_get url 'agent' 'hub_url' ''
   config_get token 'agent' 'token' ''
   config_get extra_fs 'agent' 'extra_filesystems' ''
+  config_get fp 'agent' 'fingerprint' ''
 
   [ "$enabled" -eq 0 ] && return 0
 
@@ -31,7 +35,26 @@ start_service() {
     fi
   fi
 
-  mkdir -p /usr/share/beszel-agent
+  mkdir -p "$DATA_DIR"
+
+  # migrate from pre-UCI storage on flash
+  [ -z "$fp" ] && [ -s "$OLD_FP_FILE" ] && fp=$(cat "$OLD_FP_FILE")
+
+  if [ -z "$fp" ]; then
+    DATA_DIR="$DATA_DIR" "$PROG" fingerprint > /dev/null 2>&1
+    [ -s "$FP_FILE" ] && fp=$(cat "$FP_FILE")
+  fi
+
+  if [ -n "$fp" ]; then
+    printf '%s' "$fp" > "$FP_FILE"
+    [ "$(uci -q get beszel-agent.agent.fingerprint)" = "$fp" ] || {
+      uci set beszel-agent.agent.fingerprint="$fp"
+      uci commit beszel-agent
+      logger -t beszel-agent "Fingerprint saved to UCI: $fp"
+    }
+  else
+    logger -t beszel-agent "Failed to obtain fingerprint, agent will generate one"
+  fi
 
   procd_open_instance beszel-agent
   procd_set_param command "$PROG" -listen "$port" -key "$key"
@@ -39,7 +62,7 @@ start_service() {
     procd_append_param command -url "$url" -token "$token"
   }
 
-  procd_set_param env DATA_DIR=/usr/share/beszel-agent
+  procd_set_param env DATA_DIR="$DATA_DIR"
   [ -n "$extra_fs" ] && procd_append_param env EXTRA_FILESYSTEMS="$extra_fs"
   procd_set_param respawn 3600 5 5
   procd_set_param stdout 1
