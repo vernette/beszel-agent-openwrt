@@ -138,7 +138,11 @@ jobs:
 
       - name: Install dependencies
         working-directory: /builder
-        run: apt update && apt install -y upx-ucl
+        run: |
+          set -euo pipefail
+          wget -qO- https://github.com/upx/upx/releases/download/v5.2.1/upx-5.2.1-amd64_linux.tar.xz \
+            | tar -xJ --strip-components=1 -C /usr/local/bin --wildcards '*/upx'
+          upx --version | head -1
 
       - name: Prepare package structure
         working-directory: /builder
