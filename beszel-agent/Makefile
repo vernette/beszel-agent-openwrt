@@ -15,6 +15,13 @@ PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
 
 include $(INCLUDE_DIR)/package.mk
 
+# Don't let the SDK (s)strip the binary after UPX packs it: sstrip -z trims the
+# packed file's tail and shrinks p_filesz of its non-writable LOAD segment below
+# p_memsz, and the resulting binary segfaults immediately on exec. The upstream
+# release binary is already stripped, so this costs nothing.
+RSTRIP:=:
+STRIP:=:
+
 define Package/beszel-agent
   SECTION:=admin
   CATEGORY:=Administration
