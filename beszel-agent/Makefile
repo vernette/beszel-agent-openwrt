@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=beszel-agent
 PKG_VERSION:=$(or $(BESZEL_VERSION),0.0.0)
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 PKG_SOURCE:=$(PKG_NAME)_linux_$(or $(BESZEL_GOARCH),arm64).tar.gz
 PKG_SOURCE_URL:=https://github.com/henrygd/beszel/releases/download/v$(PKG_VERSION)/
